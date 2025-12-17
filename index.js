@@ -53,11 +53,11 @@ async function run() {
     await client.connect();
      const db = client.db('eTutionbd_db');
     const usersCollection = db.collection('users');
-    
+    const tuitionCollection = db.collection('tuitionlist');
 
 
     // middle student before allowing student activity
-
+    
 
     // USERS APIs
     app.post('/users', async (req, res) => {
@@ -82,7 +82,12 @@ async function run() {
     });
 
 
-   
+    // tuition post 
+     app.post('/tuitionlist', async (req, res) => {
+      const tuitionPost = req.body;
+      const result = await tuitionCollection.insertOne(tuitionPost);
+      res.send(result);
+    })
 
 
 
