@@ -227,13 +227,28 @@ async function run() {
       }
     });
 
+    app.get('/tuitionlist/approved', verifyFBToken, async (req, res) => {
+      try {
+        const result = await tuitionCollection
+          .find({ status: 'approved' })
+          .toArray();
 
-    //   app.get('/tuitionlist/:tuitionId', async (req, res) => {
-    //   const tuitionId = req.params.trackingId;
-    //   const query = { tuitionId };
-    //   const result = await tuitionCollection.find(query).toArray();
-    //   res.send(result);
-    // })
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: 'Failed to fetch approved tuitions' });
+      }
+    });
+
+
+
+      app.get('/tuitionlist/:tuitionId', async (req, res) => {
+       const id = req.params.tuitionId;
+      const result = await tuitionCollection.findOne({
+        _id: new ObjectId(id)
+      });
+      res.send(result);
+    })
 
 
 
