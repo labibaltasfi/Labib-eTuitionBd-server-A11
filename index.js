@@ -67,17 +67,17 @@ async function run() {
 
 
     // middle student before allowing student activity
-     const verifyAdmin = async (req, res, next) => {
-            const email = req.decoded_email;
-            const query = { email };
-            const user = await usersCollection.findOne(query);
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded_email;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
 
-            if (!user || user.role !== 'admin') {
-                return res.status(403).send({ message: 'forbidden access' });
-            }
+      if (!user || user.role !== 'admin') {
+        return res.status(403).send({ message: 'forbidden access' });
+      }
 
-            next();
-        }
+      next();
+    }
 
 
     const verifyStudent = async (req, res, next) => {
@@ -108,6 +108,15 @@ async function run() {
         res.send(result);
       }
     })
+
+    app.delete('/users/:id', verifyFBToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+
+      const result = await usersCollection.deleteOne(query);
+      res.send(result);
+    })
+
 
     app.get('/users/:email/role', verifyFBToken, async (req, res) => {
       const email = req.params.email;
@@ -170,7 +179,7 @@ async function run() {
       res.send(result);
     })
 
-    app.patch('/updateUser/:id', verifyToken, verifyAdmin, async (req, res) => {
+    app.patch('/updateUser/:id', verifyFBToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const updatedInfo = req.body;
 
@@ -184,22 +193,13 @@ async function run() {
 
 
 
-    app.delete('/users/:id', verifyFBToken, verifyAdmin,  async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) }
-
-      const result = await usersCollection.deleteOne(query);
-      res.send(result);
-    })
-
-
 
 
     // tuition post 
-    app.post('/tuitionlist', verifyStudent, async (req, res) => {
+    app.post('/tuitionlist', async (req, res) => {
       const tuitionPost = req.body;
-      rider.status = 'pending';
-      rider.createdAt = new Date();
+      tuitionPost.status = 'pending';
+      tuitionPost.createdAt = new Date();
 
       const result = await tuitionCollection.insertOne(tuitionPost);
       res.send(result);
@@ -210,6 +210,23 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     })
+
+    app.patch('/tuitionlist/:id', verifyFBToken, verifyAdmin, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { status } = req.body;
+
+        const result = await tuitionCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status, updatedAt: new Date() } }
+        );
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Status update failed' });
+      }
+    });
+
 
     //   app.get('/tuitionlist/:tuitionId', async (req, res) => {
     //   const tuitionId = req.params.trackingId;
