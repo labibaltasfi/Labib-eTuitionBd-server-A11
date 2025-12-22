@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config()
+require('dotenv').config();
+var jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 3000;
@@ -64,6 +65,15 @@ async function run() {
     const db = client.db('eTutionbd_db');
     const usersCollection = db.collection('users');
     const tuitionCollection = db.collection('tuitionlist');
+    const applicationsCollection = db.collection('tutorApplications')
+
+
+    //jwt related api
+    app.post('/getToken', (req, res) => {
+      const loggedUser = req.body;
+      const token = jwt.sign(loggedUser, process.env.JWT_SECRET, { expiresIn: '1h' })
+      res.send({ token: token })
+    })
 
 
     // middle student before allowing student activity
@@ -81,6 +91,18 @@ async function run() {
 
 
     const verifyStudent = async (req, res, next) => {
+      const email = req.decoded_email;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
+
+      if (!user || user.role !== 'student') {
+        return res.status(403).send({ message: 'forbidden access' });
+      }
+
+      next();
+    }
+
+    const verifyTutor = async (req, res, next) => {
       const email = req.decoded_email;
       const query = { email };
       const user = await usersCollection.findOne(query);
@@ -126,13 +148,9 @@ async function run() {
     })
 
 
-    // app.get('/users', verifyFBToken, async (req, res) => {
-    //   const cursor = usersCollection.find();
-    //   const result = await cursor.toArray();
-    //   res.send(result);
-    // });
 
-    // users related apis
+
+
     app.get('/users', verifyFBToken, verifyAdmin, async (req, res) => {
       try {
         const searchText = req.query.searchText || '';
@@ -242,13 +260,71 @@ async function run() {
 
 
 
-      app.get('/tuitionlist/:tuitionId', async (req, res) => {
-       const id = req.params.tuitionId;
+    app.get('/tuitionlist/:tuitionId', async (req, res) => {
+      const id = req.params.tuitionId;
       const result = await tuitionCollection.findOne({
         _id: new ObjectId(id)
       });
       res.send(result);
     })
+
+    app.post("/applications", async (req, res) => {
+      const application = req.body;
+
+      const query = {
+        tutorEmail: application.tutorEmail,
+        tuitionId: application.tuitionId
+      };
+
+      const alreadyApplied = await applicationsCollection.findOne(query);
+
+      if (alreadyApplied) {
+        return res.status(400).send({
+          message: "You have already applied for this tuition post!"
+        });
+      }
+
+      const result = await applicationsCollection.insertOne({
+        ...application,
+        appliedAt: new Date(),
+      });
+
+      res.send(result);
+    });
+
+
+
+    app.get("/applications/:tuitionId", async (req, res) => {
+      const id = req.params.tuitionId;
+
+      const query = { tuitionId: id };
+
+      const applications = await applicationsCollection
+        .find(query)
+        .toArray();
+
+      res.send(applications);
+    });
+
+
+app.get("/tuitions-with-applications", async (req, res) => {
+  const tuitions = await tuitionCollection.find({}).toArray();
+
+  const result = await Promise.all(
+    tuitions.map(async (tuition) => {
+      const applications = await applicationsCollection
+        .find({ tuitionId: tuition._id.toString() })
+        .toArray();
+      return { tuition, applications };
+    })
+  );
+
+  res.json(result);
+});
+
+
+
+
 
 
 
