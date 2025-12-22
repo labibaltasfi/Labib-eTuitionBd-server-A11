@@ -3,6 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 var jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const stripe = require('stripe')(process.env.STRIPE_SECRET);
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -65,7 +66,8 @@ async function run() {
     const db = client.db('eTutionbd_db');
     const usersCollection = db.collection('users');
     const tuitionCollection = db.collection('tuitionlist');
-    const applicationsCollection = db.collection('tutorApplications')
+    const applicationsCollection = db.collection('tutorApplications');
+    const paymentCollection = db.collection('payments');
 
 
     //jwt related api
@@ -292,6 +294,13 @@ async function run() {
       res.send(result);
     });
 
+    app.get('/applications/by-id/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+      const result = await applicationsCollection.findOne(query);
+      res.send(result);
+    })
+
 
 
     app.get("/applications/:tuitionId", async (req, res) => {
@@ -307,21 +316,88 @@ async function run() {
     });
 
 
-app.get("/tuitions-with-applications", async (req, res) => {
-  const tuitions = await tuitionCollection.find({}).toArray();
+    app.get("/tuitions-with-applications", async (req, res) => {
+      const tuitions = await tuitionCollection.find({}).toArray();
 
-  const result = await Promise.all(
-    tuitions.map(async (tuition) => {
-      const applications = await applicationsCollection
-        .find({ tuitionId: tuition._id.toString() })
-        .toArray();
-      return { tuition, applications };
+      const result = await Promise.all(
+        tuitions.map(async (tuition) => {
+          const applications = await applicationsCollection
+            .find({ tuitionId: tuition._id.toString() })
+            .toArray();
+          return { tuition, applications };
+        })
+      );
+
+      res.json(result);
+    });
+
+
+
+
+    // payment related apis
+    app.post('/payment-checkout-session', async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = parseInt(paymentInfo.expectedSalary) * 100;
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: 'BDT',
+              unit_amount: amount,
+              product_data: {
+                name: `Please pay for: ${paymentInfo.tutorName}`
+              }
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        metadata: {
+          applicationId: paymentInfo.applicationId,
+        },
+        TutorEmail_email: paymentInfo.tutorEmail,
+        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
+      })
+
+      res.send({ url: session.url })
     })
-  );
 
-  res.json(result);
-});
 
+     app.patch('/payment-success', async (req, res) => {
+            const sessionId = req.query.session_id;
+            const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+            if (session.payment_status === 'paid') {
+                const id = session.metadata.applicationId;
+                const query = { _id: new ObjectId(id) }
+                const update = {
+                    $set: {
+                        status: 'paid',
+                    }
+                }
+
+                const result = await applicationsCollection.updateOne(query, update);
+
+                   const payment = {
+                    amount: session.amount_total / 100,
+                    currency: session.currency,
+                    TutorEmail: session.TutorEmail,
+                    applicationId: session.metadata.applicationId,
+                    tutorName: session.metadata.tutorName,
+                    transactionId: session.payment_intent,
+                    paymentStatus: session.payment_status,
+                    paidAt: new Date(),
+                }
+
+                if (session.payment_status === 'paid') {
+                    const resultPayment = await paymentCollection.insertOne(payment);
+
+            }
+          }
+
+           return res.send({ success: false })
+        })
 
 
 
