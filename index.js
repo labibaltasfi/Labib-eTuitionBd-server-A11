@@ -287,7 +287,7 @@ async function run() {
       }
     });
 
-    app.get('/tuitionlist/approved',  async (req, res) => {
+    app.get('/tuitionlist/approved', async (req, res) => {
       try {
         const result = await tuitionCollection.find({
           status: 'approved',
@@ -342,7 +342,28 @@ async function run() {
       const query = { _id: new ObjectId(id) }
       const result = await applicationsCollection.findOne(query);
       res.send(result);
-    })
+    });
+
+    app.get('/applications/check', async (req, res) => {
+      const { email, tuitionId } = req.query;
+
+      try {
+
+        const query = {
+          tutorEmail: email,
+          tuitionId: tuitionId
+        };
+
+        const application = await applicationsCollection.findOne(query);
+
+
+        res.send({ applied: !!application, details: application });
+      } catch (error) {
+        res.status(500).send({ message: "Error checking application" });
+      }
+    });
+
+
 
 
 
@@ -373,6 +394,56 @@ async function run() {
 
       res.json(result);
     });
+
+
+    //  tutor-revenue
+    app.get('/tutor-revenue', async (req, res) => {
+      const email = req.query.email;
+
+      if (!email) return res.status(400).send({ message: "Email is required" });
+
+      try {
+        const payments = await paymentCollection
+          .find({ tutorEmail: email, paymentStatus: 'paid' })
+          .sort({ paidAt: -1 }) // just paidAt
+          .toArray();
+
+        let totalGross = 0;
+        let totalNet = 0;
+
+        const history = payments.map(pay => {
+          const amount = parseFloat(pay.amount);
+          const netEarnings = amount * 0.8; // 80%
+          totalGross += amount;
+          totalNet += netEarnings;
+
+          return {
+            _id: pay._id,
+            paidAt: pay.paidAt,
+            studentName: pay.studentName,
+            studentEmail: pay.studentEmail,
+            transactionId: pay.transactionId,
+            amount,
+            tutorNet: netEarnings.toFixed(2),
+            currency: pay.currency,
+          };
+        });
+
+        res.send({
+          history,
+          totals: {
+            totalGross: totalGross.toFixed(2),
+            totalNet: totalNet.toFixed(2)
+          }
+        });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Internal Server Error", error });
+      }
+    });
+
+
+
 
 
     app.get("/tuitions-with-applications/by-tutor", async (req, res) => {
@@ -406,6 +477,66 @@ async function run() {
         res.status(500).send({ message: "Server Error", error });
       }
     });
+
+    app.get("/my-applications", async (req, res) => {
+      try {
+        const email = req.query.email;
+        if (!email) return res.status(400).send({ message: "Email is required" });
+
+        const query = { tutorEmail: email };
+        const result = await applicationsCollection.find(query).toArray();
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
+
+    // DELETE Application
+    app.delete('/my-applications/:id', async (req, res) => {
+      const id = req.params.id;
+      const email = req.query.email;
+
+      const query = { _id: new ObjectId(id), tutorEmail: email };
+      const application = await applicationsCollection.findOne(query);
+
+      if (!application) {
+        return res.status(404).send({ message: "Application not found" });
+      }
+
+
+      if (application.status !== 'pending') {
+        return res.status(403).send({ message: "Cannot delete an approved/rejected request" });
+      }
+
+      const result = await applicationsCollection.deleteOne(query);
+      res.send(result);
+    });
+
+
+    app.patch('/my-applications/:id', async (req, res) => {
+      const id = req.params.id;
+      const { expectedSalary, experience, email } = req.body;
+
+      const query = { _id: new ObjectId(id), tutorEmail: email };
+
+      const updateDoc = {
+        $set: {
+          expectedSalary: expectedSalary,
+          experience: experience
+        }
+      };
+
+      try {
+        const result = await applicationsCollection.updateOne(query, updateDoc);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to update" });
+      }
+    });
+
+
 
 
 
