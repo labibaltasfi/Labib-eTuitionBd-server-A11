@@ -1,3 +1,4 @@
 node_modules
 .env
 labib-etuitionbd-a11-firebase-admin.json
+.vercel
