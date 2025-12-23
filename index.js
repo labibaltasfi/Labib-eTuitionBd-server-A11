@@ -242,37 +242,63 @@ async function run() {
 
 
     // GET /admin/monthly-earnings
-    app.get("/admin/monthly-earnings", async (req, res) => {
-      try {
-        const result = await paymentCollection.aggregate([
-          {
-            $match: {
-              paymentStatus: "paid"
-            }
-          },
-          {
-            $group: {
-              _id: {
-                year: { $year: "$paidAt" },
-                month: { $month: "$paidAt" }
-              },
-              totalEarnings: { $sum: "$amount" },
-              totalTransactions: { $sum: 1 }
-            }
-          },
-          {
-            $sort: {
-              "_id.year": 1,
-              "_id.month": 1
-            }
-          }
-        ]).toArray();
+    app.get(
+      "/transactions",
+   
+      async (req, res) => {
+        try {
+          const transactions = await paymentCollection
+            .find({ paymentStatus: "paid" })
+            .sort({ paidAt: -1 })
+            .toArray();
 
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: "Failed to load earnings" });
+          res.send(transactions);
+        } catch (error) {
+          res.status(500).send({ message: "Failed to load transactions" });
+        }
       }
-    });
+    );
+
+
+
+    app.get(
+      "/platform-earnings",
+      
+      async (req, res) => {
+        try {
+
+          const result = await paymentCollection
+            .aggregate([
+              { $match: { paymentStatus: "paid" } },
+              {
+                $group: {
+                  _id: {
+                    year: { $year: "$paidAt" },
+                    month: { $month: "$paidAt" }
+                  },
+                  totalAmount: { $sum: "$amount" },
+                  totalTransactions: { $sum: 1 }
+                }
+              },
+              {
+                $sort: { "_id.year": 1, "_id.month": 1 }
+              }
+            ])
+            .toArray();
+
+
+          const dataWithCommission = result.map(item => ({
+            ...item,
+            platformEarnings: Math.round(item.totalAmount * 0.2)
+          }));
+
+          res.send(dataWithCommission);
+        } catch (error) {
+          res.status(500).send({ message: "Failed to load earnings" });
+        }
+      }
+    );
+
 
 
 
