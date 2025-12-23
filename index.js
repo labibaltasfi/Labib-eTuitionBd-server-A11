@@ -241,6 +241,41 @@ async function run() {
     });
 
 
+    // GET /admin/monthly-earnings
+    app.get("/admin/monthly-earnings", async (req, res) => {
+      try {
+        const result = await paymentCollection.aggregate([
+          {
+            $match: {
+              paymentStatus: "paid"
+            }
+          },
+          {
+            $group: {
+              _id: {
+                year: { $year: "$paidAt" },
+                month: { $month: "$paidAt" }
+              },
+              totalEarnings: { $sum: "$amount" },
+              totalTransactions: { $sum: 1 }
+            }
+          },
+          {
+            $sort: {
+              "_id.year": 1,
+              "_id.month": 1
+            }
+          }
+        ]).toArray();
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to load earnings" });
+      }
+    });
+
+
+
 
 
 
@@ -427,7 +462,7 @@ async function run() {
             tutorNet: netEarnings.toFixed(2),
             currency: pay.currency,
           };
-        });   
+        });
 
         res.send({
           history,
@@ -513,6 +548,28 @@ async function run() {
       const result = await applicationsCollection.deleteOne(query);
       res.send(result);
     });
+
+    // reject application
+    app.patch('/applications/reject/:id', async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        const result = await applicationsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              status: 'rejected',
+              rejectedAt: new Date()
+            }
+          }
+        );
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to reject application' });
+      }
+    });
+
 
 
     app.patch('/my-applications/:id', async (req, res) => {
