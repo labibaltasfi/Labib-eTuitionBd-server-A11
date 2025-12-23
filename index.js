@@ -427,7 +427,7 @@ async function run() {
             tutorNet: netEarnings.toFixed(2),
             currency: pay.currency,
           };
-        });
+        });   
 
         res.send({
           history,
