@@ -163,6 +163,34 @@ async function run() {
       res.send(user);
     });
 
+    app.get('/users/demo', async (req, res) => {
+  try {
+    const user = await usersCollection.findOne(
+      { email: 'demo@demo.com' },
+      {
+        projection: {
+          email: 1,
+          displayName: 1,
+          role: 1,
+          mobile: 1,
+          photoURL: 1,
+          demorole: 1,
+        },
+      }
+    );
+
+    if (!user) {
+      return res.status(404).send({ message: 'Demo user not found' });
+    }
+
+    res.send(user);
+  } catch (error) {
+    console.error('Demo user error:', error);
+    res.status(500).send({ message: 'Internal Server Error' });
+  }
+});
+
+
 
     app.delete('/users/:id', verifyFBToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
@@ -207,7 +235,7 @@ async function run() {
       }
     });
 
-    app.patch('/users/:id/role', verifyFBToken, verifyAdmin, async (req, res) => {
+    app.patch('/users/:id/role', verifyFBToken, async (req, res) => {
       const id = req.params.id;
       const roleInfo = req.body;
       const query = { _id: new ObjectId(id) }
@@ -228,7 +256,7 @@ async function run() {
       res.send(result);
     })
 
-    app.patch('/updateUser/:id', verifyFBToken, async (req, res) => {
+    app.patch('/updateUser/:id', async (req, res) => {
       const id = req.params.id;
       const updatedInfo = req.body;
 
