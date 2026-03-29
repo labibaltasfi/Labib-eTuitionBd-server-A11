@@ -216,7 +216,6 @@ async function run() {
         const role = req.query.role;
         const query = {};
 
-        // If role is specified, allow public access (for LatestTutors component)
         if (role) {
           query.role = role;
           
@@ -228,7 +227,6 @@ async function run() {
           return res.send(result);
         }
 
-        // For admin queries without role filter, require authentication
         const token = req.headers.authorization;
         if (!token) {
           return res.status(401).send({ message: 'unauthorized access' });
@@ -236,16 +234,16 @@ async function run() {
 
         try {
           const idToken = token.split(' ')[1];
-          await admin.auth().verifyIdToken(idToken);
+          const decodedToken = await admin.auth().verifyIdToken(idToken);
+
+          // Verify admin role
+          const email = decodedToken?.email;
+          const user = await usersCollection.findOne({ email });
+          if (!user || user.role !== 'admin') {
+            return res.status(403).send({ message: 'forbidden access' });
+          }
         } catch (err) {
           return res.status(401).send({ message: 'unauthorized access' });
-        }
-
-        // Verify admin role
-        const email = req.decoded_email;
-        const user = await usersCollection.findOne({ email });
-        if (!user || user.role !== 'admin') {
-          return res.status(403).send({ message: 'forbidden access' });
         }
 
         if (searchText) {
