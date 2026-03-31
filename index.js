@@ -91,6 +91,7 @@ async function run() {
     const tuitionCollection = db.collection('tuitionlist');
     const applicationsCollection = db.collection('tutorApplications');
     const paymentCollection = db.collection('payments');
+    const contactsCollection = db.collection('contacts');
 
 
     //jwt related api
@@ -297,6 +298,66 @@ async function run() {
       );
 
       res.send(result);
+    });
+
+    // CONTACT APIs
+    app.post('/contacts', async (req, res) => {
+      try {
+        const { name, email, message } = req.body;
+
+        if (!name || !email || !message) {
+          return res.status(400).send({ message: 'Name, email and message are required' });
+        }
+
+        const contactMessage = {
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          message: message.trim(),
+          status: 'unread',
+          createdAt: new Date()
+        };
+
+        const result = await contactsCollection.insertOne(contactMessage);
+        res.status(201).send({
+          success: true,
+          message: 'Message sent successfully',
+          insertedId: result.insertedId
+        });
+      } catch (error) {
+        console.error('POST /contacts error:', error);
+        res.status(500).send({ message: 'Failed to save contact message' });
+      }
+    });
+
+    app.get('/contacts', verifyFBToken, verifyAdmin, async (req, res) => {
+      try {
+        const result = await contactsCollection.find({}).sort({ createdAt: -1 }).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error('GET /contacts error:', error);
+        res.status(500).send({ message: 'Failed to fetch contact messages' });
+      }
+    });
+
+    app.patch('/contacts/:id/status', verifyFBToken, verifyAdmin, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { status } = req.body;
+
+        if (!status || !['unread', 'read'].includes(status)) {
+          return res.status(400).send({ message: 'Valid status is required (unread/read)' });
+        }
+
+        const result = await contactsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status, updatedAt: new Date() } }
+        );
+
+        res.send(result);
+      } catch (error) {
+        console.error('PATCH /contacts/:id/status error:', error);
+        res.status(500).send({ message: 'Failed to update contact status' });
+      }
     });
 
 
